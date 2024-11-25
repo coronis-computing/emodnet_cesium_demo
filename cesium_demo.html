@@ -406,6 +406,7 @@
         let countourLineSpacing = 500;
         let invertContourLines = false;
         let zoomToHrDtm = false;
+        let currentTab = "none";
 
         // Update the light direction every frame to match the current camera view
         scene.light = new Cesium.DirectionalLight({
@@ -545,11 +546,17 @@
 
         // Shows the corresponding tab
         function showTab(tabName) {
+            if (currentTab == tabName) {
+                document.getElementById(`${tabName}`).classList.remove('active');    
+                currentTab = "none";
+                return;
+            }
             document.getElementById('terrain-exaggeration-tab').classList.remove('active');
             document.getElementById('contours-tab').classList.remove('active');
             document.getElementById('color-ramp-tab').classList.remove('active');
             document.getElementById('misc-tab').classList.remove('active');
             document.getElementById(`${tabName}`).classList.add('active');
+            currentTab = `${tabName}`;
         }
 
         // Adds a contour band to the global list
@@ -572,7 +579,7 @@
             const listItem = document.createElement('div');
             listItem.innerHTML = `
                 <span style="color: ${color.toCssColorString()}">■</span>
-                ${elevation}m
+                at ${elevation}m, ${width}m wide
                 <button class="removeContourBand">Remove</button>
             `;
             listItem.querySelector('.removeContourBand').addEventListener('click', () => {
