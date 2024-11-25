@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMODnet Bathymetry - Showcase of new developments in Cesium</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.123.0/Cesium.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.123.0/Widgets/widgets.min.css" rel="stylesheet">
+    <style>
+        html{
+            height:100%
+        }
+        body{
+            background:#000;
+            color:#eee;
+            font-family:sans-serif;
+            font-size:9pt;
+            padding:0;
+            margin:0;
+            width:100%;
+            height:100%;
+            overflow:hidden
+        }
+        .fullSize{
+            display:block;
+            position:absolute;
+            top:0;
+            left:0;
+            border:none;
+            width:100%;
+            height:100%
+        }
+        #cesium-container { width: 100%; height: 100%; position: absolute; }
+        #toolbar {
+            position: absolute;            
+            top: 10px;
+            left: 10px;
+            z-index: 1;
+            background: rgba(42, 42, 42, 0.8);
+            padding: 4px;
+            border-radius: 4px;
+        }
+        #toolbar .header {
+            font-weight: bold;
+        }
+        .tab-content {
+            display: none;
+            margin-top: 10px;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        #toolbar input {
+            vertical-align: middle;
+            padding-top: 2px;
+            padding-bottom: 2px;
+        }
+        #message {
+            color: red;
+            margin-top: 5px;
+        }
+        #toolbar #minHeight {
+            text-align: right;
+        }
+        #toolbar #colorRamp {
+            width: 100%;
+            border: 1px solid lightgray;
+        }
+    </style>
+</head>
+<body>
+    <div id="cesium-container"></div>
+    <div id="toolbar">
+        <div class="tab-buttons">            
+            <button onclick="showTab('terrain-exaggeration-tab')">Exaggeration</button>
+            <button onclick="showTab('contours-tab')">Contours</button>
+            <button onclick="showTab('color-ramp-tab')">Color Ramp</button>
+            <button onclick="showTab('misc-tab')">Misc.</button>
+        </div>    
+        <div id="terrain-exaggeration-tab" class="tab-content">
+            <table>
+            <tbody>
+                <tr>
+                    <td>Exaggeration</td>
+                    <td>
+                        <input id="exaggerationSlider" type="range" min="1" max="5" step="0.01" value="1">
+                        <input id="exaggerationValue" type="text" size="5" value="1">
+                    </td>
+                </tr>
+                <tr>
+                    <td>Relative Height</td>
+                    <td>
+                        <input id="relativeHeightSlider" type="range" min="-1000" max="9000" step="1" value="0">
+                        <input id="relativeHeightValue" type="text" size="5" value="0">
+                    </td>
+                </tr>                
+            </tbody>
+            </table>
+        </div> 
+        <div id="contours-tab" class="tab-content">
+            <div id="message"></div>
+            <table>
+                <tbody>
+                    <tr>
+                        <td class="header">Contour Bands</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <input type="checkbox" id="toggleContourBands">
+                            <label for="toggleContourBands">Activate</label>
+                        </td>
+                    </tr>                    
+                    <tr>                    
+                    <td>
+                        <label>Add at elevation/width (m):</label>
+                        <input type="number" id="contourBandElevation" step="10" value="-100">
+                        <input type="number" id="contourBandWidth" step="10" value="10">
+                        <button id="addContour">Add Contour</button>
+                    </td>
+                    </tr>                    
+                </tbody>
+            </table>
+            <div id="contourList"></div>
+            <table>
+                <tbody>
+                    <tr>
+                        <td class="header">Evenly-spaced Contours</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <input type="checkbox" id="toggleContours">
+                            <label for="toggleContours">Activate</label>
+                        </td>
+                    </tr>                    
+                    <tr>
+                        <td>
+                            <label>Each (m):</label>
+                            <input type="number" id="contoursEach" min="1" step="10000" value="500" step="100">
+                        </td>
+                    </tr>                    
+                    <tr>
+                        <td>
+                            <input type="checkbox" id="toggleInvertContoursColor">
+                            <label for="toggleInvertContoursColor">Invert contours colour</label>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="color-ramp-tab" class="tab-content">
+            <table>
+                <tbody>
+                    <tr>
+                        <td class="header">Custom Color Ramp</td>
+                    </tr>                    
+                    <tr>
+                        <td id="minHeight">-10000m</td>
+                        <td><canvas id="colorRamp"></canvas></td>
+                        <td>2000m</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <input type="checkbox" id="toggleColorRamp">
+                            <label for="toggleColorRamp">Activate (WARNING: hides contour bands)</label>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="misc-tab" class="tab-content">
+            <table>
+                <tbody>
+                    <tr>
+                        <td>
+                            <input type="checkbox" id="toggleLighting">
+                            <label for="toggleLighting">Enable lighting (only for Cesium Bathymetry).</label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <input type="checkbox" id="toggleZoomToHrDtm">
+                            <label for="toggleZoomToHrDtm">Zoom to HR-DTM when selected.</label>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        /*** Main ***/
+
+        // Your access token here (you'll need to sign up at https://cesium.com/ion/signup/)
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIwYjNiNWFjOS01NjA2LTQ1ZTYtOTlmOS0xZDU1MmNhNWFjZjgiLCJpZCI6NTU3Mywic2NvcGVzIjpbImFzciIsImdjIl0sImlhdCI6MTU0MzU3NjEzMX0._ZsATxPqafUdeH8BjyU-bcq2VS0VrLAI-GXETcgvqU0';
+
+        HRDTMsURL = "http://localhost:8888";
+
+        // Imagery
+        imagerySources = [
+            new Cesium.ProviderViewModel({
+                name: "EMODnet - mean",
+                iconUrl: Cesium.buildModuleUrl(
+                    "Widgets/Images/ImageryProviders/ArcGisMapServiceWorldOcean.png"
+                ),
+                category: "EMODnet Bathymetry",
+                tooltip:
+                    "EMODnet - mean",
+                creationFunction: function () {
+                    return new Cesium.WebMapServiceImageryProvider({
+                        url : 'https://ows.emodnet-bathymetry.eu/wms',
+                        layers : 'emodnet:mean',
+                    });
+                },
+            }),
+            new Cesium.ProviderViewModel({
+                name: "EMODnet - mean (multicolour)",
+                iconUrl: Cesium.buildModuleUrl(
+                    "Widgets/Images/ImageryProviders/ArcGisMapServiceWorldOcean.png"
+                ),
+                category: "EMODnet Bathymetry",
+                tooltip:
+                    "EMODnet - mean (multicolour)",
+                creationFunction: function () {
+                    return new Cesium.WebMapServiceImageryProvider({
+                        url : 'https://ows.emodnet-bathymetry.eu/wms',
+                        // layers : 'emodnet:mean',
+                        // parameters : {
+                        //     styles : 'multicolour'
+                        // },
+                        layers : 'emodnet:mean_multicolour'
+                    });
+                },
+            }),
+            new Cesium.ProviderViewModel({
+                name: "EMODnet - mean (rainbow color)",
+                iconUrl: Cesium.buildModuleUrl(
+                    "Widgets/Images/ImageryProviders/ArcGisMapServiceWorldOcean.png"
+                ),
+                category: "EMODnet Bathymetry",
+                tooltip:
+                    "EMODnet - Mean depth rainbow colour ramp",
+                creationFunction: function () {
+                    return new Cesium.WebMapServiceImageryProvider({
+                        url : 'https://ows.emodnet-bathymetry.eu/wms',
+                        layers : 'emodnet:mean_rainbowcolour'
+                    });
+                },
+            }),
+            // new Cesium.ProviderViewModel({
+            //     name: "EMODnet - mean 2020",
+            //     iconUrl: Cesium.buildModuleUrl(
+            //         "Widgets/Images/ImageryProviders/ArcGisMapServiceWorldOcean.png"
+            //     ),
+            //     category: "EMODnet Bathymetry",
+            //     tooltip:
+            //         "EMODnet - Mean depth (DTM release 2020)",
+            //     creationFunction: function () {
+            //         return new Cesium.WebMapServiceImageryProvider({
+            //             url : 'https://ows.emodnet-bathymetry.eu/wms',
+            //             layers : 'emodnet:mean_2020'
+            //         });
+            //     },
+            // }),
+            // new Cesium.ProviderViewModel({
+            //     name: "EMODnet - mean 2018",
+            //     iconUrl: Cesium.buildModuleUrl(
+            //         "Widgets/Images/ImageryProviders/ArcGisMapServiceWorldOcean.png"
+            //     ),
+            //     category: "EMODnet Bathymetry",
+            //     tooltip:
+            //         "EMODnet - Mean depth (DTM release 2018)",
+            //     creationFunction: function () {
+            //         return new Cesium.WebMapServiceImageryProvider({
+            //             url : 'https://ows.emodnet-bathymetry.eu/wms',
+            //             layers : 'emodnet:mean_2018'
+            //         });
+            //     },
+            // }),
+            // new Cesium.ProviderViewModel({
+            //     name: "EMODnet - mean 2016",
+            //     iconUrl: Cesium.buildModuleUrl(
+            //         "Widgets/Images/ImageryProviders/ArcGisMapServiceWorldOcean.png"
+            //     ),
+            //     category: "EMODnet Bathymetry",
+            //     tooltip:
+            //         "EMODnet - Mean depth (DTM release 2016)",
+            //     creationFunction: function () {
+            //         return new Cesium.WebMapServiceImageryProvider({
+            //             url : 'https://ows.emodnet-bathymetry.eu/wms',
+            //             layers : 'emodnet:mean_2016'
+            //         });
+            //     },
+            // })            
+        ]
+
+        // Terrain layers
+        terrainSources = [
+            new Cesium.ProviderViewModel({
+                name: "Ellipsoid",
+                iconUrl: Cesium.buildModuleUrl(
+                    "Widgets/Images/TerrainProviders/Ellipsoid.png"
+                ),
+                category: "Global DTMs",
+                tooltip:
+                    "Ellipsoid (no elevation)",
+                creationFunction: function () {
+                    return Cesium.EllipsoidTerrainProvider();
+                },
+            }),
+            new Cesium.ProviderViewModel({
+                name: "EMODnet",
+                iconUrl: Cesium.buildModuleUrl(
+                    "Widgets/Images/TerrainProviders/CesiumWorldTerrain.png"
+                ),
+                category: "Global DTMs",
+                tooltip:
+                    "EMODnet - Quantized mesh tiles",                
+                creationFunction: function () {
+                    return Cesium.CesiumTerrainProvider.fromUrl("https://tiles.emodnet-bathymetry.eu/latest/terrain/", {requestVertexNormals: true});
+                },
+            }),
+            new Cesium.ProviderViewModel({
+                name: "Cesium Bathymetry",
+                iconUrl: Cesium.buildModuleUrl(
+                    "Widgets/Images/TerrainProviders/CesiumWorldTerrain.png"
+                ),
+                category: "Global DTMs",
+                tooltip:
+                    "Cesium Bathymetry",                
+                creationFunction: function () {
+                    //return Cesium.CesiumTerrainProvider.fromIonAssetId(2426648);
+                    return Cesium.createWorldBathymetryAsync({requestVertexNormals: true,});
+                },
+            }),
+            new Cesium.ProviderViewModel({
+                name: "280_201202-BalearicSea",
+                iconUrl: Cesium.buildModuleUrl(
+                    "Widgets/Images/TerrainProviders/CesiumWorldTerrain.png"
+                ),
+                category: "HR-DTMs",
+                tooltip:
+                    "280_201202-BalearicSea",                
+                creationFunction: function () {                    
+                    zoomToTerrain("280_201202-BalearicSea");
+                    return Cesium.CesiumTerrainProvider.fromUrl(HRDTMsURL + "/280_201202-BalearicSea", {requestVertexNormals: true});
+                },
+            }),
+            new Cesium.ProviderViewModel({
+                name: "353_Girona_spanish_margin",
+                iconUrl: Cesium.buildModuleUrl(
+                    "Widgets/Images/TerrainProviders/CesiumWorldTerrain.png"
+                ),
+                category: "HR-DTMs",
+                tooltip:
+                    "353_Girona_spanish_margin",                
+                creationFunction: function () {                    
+                    zoomToTerrain("353_Girona_spanish_margin");
+                    return Cesium.CesiumTerrainProvider.fromUrl(HRDTMsURL + "/353_Girona_spanish_margin", {requestVertexNormals: true});
+                },
+            }),
+        ]
+
+        // We change the default camera view to point to Europe instead of the US
+        var west = -36;
+        var south = 14;
+        var east = 43;
+        var north = 90;
+        var europeRectangle = Cesium.Rectangle.fromDegrees(west, south, east, north);
+        Cesium.Camera.DEFAULT_VIEW_RECTANGLE = europeRectangle;
+
+        // Initialize the Cesium Viewer in the HTML element with the `cesium-container` ID.
+        const viewer = new Cesium.Viewer('cesium-container', {
+            baseLayerPicker: true,
+            sceneModePicker: true,
+            infoBox: false,
+            selectionIndicator: false,
+            geocoder: false,
+            animation: false,
+            timeline: false,
+            imageryProviderViewModels: imagerySources,
+            terrainProviderViewModels: terrainSources,
+        });
+
+        // Access the scene, globe and camera, for convenience
+        const scene = viewer.scene;
+        const globe = scene.globe;
+        const camera = scene.camera;
+
+        // Default config
+        scene.msaaSamples = 4; // Prevents aliasing from countour lines
+        globe.enableLighting = false;
+        globe.showGroundAtmosphere = false;
+        globe.maximumScreenSpaceError = 1.0; // Load higher resolution tiles for better seafloor shading
+        const colorRampMinHeight = -10000.0;
+        const colorRampMaxHeight = 2000;
+        const colorRampRange = colorRampMaxHeight - colorRampMinHeight;
+        const dFun = (height) => (height - colorRampMinHeight) / colorRampRange;
+        const cameraMaxHeight = globe.ellipsoid.maximumRadius * 2;
+        let showContourLines = false;
+        let showContourBands = false;
+        let showElevationColorRamp = false;
+        let countourLineSpacing = 500;
+        let invertContourLines = false;
+        let zoomToHrDtm = false;
+
+        // Update the light direction every frame to match the current camera view
+        scene.light = new Cesium.DirectionalLight({
+            direction: new Cesium.Cartesian3(1, 0, 0), // Updated every frame
+        });        
+        const scratchNormal = new Cesium.Cartesian3();
+        scene.preRender.addEventListener(function (scene, time) {
+            const surfaceNormal = globe.ellipsoid.geodeticSurfaceNormal(
+                camera.positionWC,
+                scratchNormal
+            );
+            const negativeNormal = Cesium.Cartesian3.negate(
+                surfaceNormal,
+                surfaceNormal
+            );
+            scene.light.direction = Cesium.Cartesian3.normalize(
+                Cesium.Cartesian3.add(
+                negativeNormal,
+                camera.rightWC,
+                surfaceNormal
+                ),
+                scene.light.direction
+            );
+        });
+
+        // Get some HTML elements for later use
+        const contourBandElevation = document.getElementById('contourBandElevation');
+        const contourBandWidth = document.getElementById('contourBandWidth');
+        const addContourButton = document.getElementById('addContour');
+        const contourList = document.getElementById('contourList');
+        const messageElement = document.getElementById('message');
+        let contourBands = [];
+
+        // Default imagery/terrain
+        viewer.baseLayerPicker.viewModel.selectedImagery =
+          viewer.baseLayerPicker.viewModel.imageryProviderViewModels[0];
+        viewer.baseLayerPicker.viewModel.selectedTerrain =
+          viewer.baseLayerPicker.viewModel.terrainProviderViewModels[1];
+
+        // Updates from inputs
+        const exaggerationSlider = document.getElementById('exaggerationSlider');
+        const exaggerationValue = document.getElementById('exaggerationValue');
+        exaggerationSlider.addEventListener('input', function(e) {
+            const exaggeration = parseFloat(e.target.value);
+            scene.verticalExaggeration = exaggeration;
+            exaggerationValue.value = exaggeration.toFixed(1);
+            updateGlobeMaterial();
+        });
+        exaggerationValue.addEventListener('change', function(e) {
+            const exaggeration = parseFloat(e.target.value);
+            scene.verticalExaggeration = exaggeration;
+            exaggerationSlider.value = exaggeration.toFixed(1);
+            updateGlobeMaterial();
+        });
+        const relativeHeightSlider = document.getElementById('relativeHeightSlider');
+        const relativeHeightValue = document.getElementById('relativeHeightValue');
+        relativeHeightSlider.addEventListener('input', function(e) {
+            const relativeHeight = parseFloat(e.target.value);
+            scene.verticalExaggerationRelativeHeight  = relativeHeight;
+            relativeHeightValue.value = relativeHeight.toFixed(1);
+            updateGlobeMaterial();
+        });
+        relativeHeightValue.addEventListener('change', function(e) {
+            const relativeHeight = parseFloat(e.target.value);
+            scene.verticalExaggerationRelativeHeight  = relativeHeight;
+            relativeHeightSlider.value = relativeHeight.toFixed(1);
+            updateGlobeMaterial();
+        });
+        const toggleLighting = document.getElementById('toggleLighting');
+        toggleLighting.addEventListener('click', function(e) {
+            globe.enableLighting = e.target.checked;
+            updateGlobeMaterial();
+        });
+        const toggleColorRamp = document.getElementById('toggleColorRamp');
+        toggleColorRamp.addEventListener('click', function(e) {
+            showElevationColorRamp = e.target.checked;
+            updateGlobeMaterial();
+        });
+        const toggleContours = document.getElementById('toggleContours');
+        toggleContours.addEventListener('click', function(e) {
+            showContourLines = e.target.checked;
+            if (showContourLines && showContourBands) {
+                // Lines and bands cannot coexist!
+                toggleContourBands.checked = false;
+                showContourBands = false;
+            }
+            updateGlobeMaterial();
+        });
+        const toggleContourBands = document.getElementById('toggleContourBands');
+        toggleContourBands.addEventListener('click', function(e) {
+            showContourBands = e.target.checked;
+            if (showContourBands && showContourLines) {
+                // Lines and bands cannot coexist!
+                toggleContours.checked = false;
+                showContourLines = false;
+            }
+            updateGlobeMaterial();
+        });
+        const contoursEach = document.getElementById('contoursEach');
+        contoursEach.addEventListener('change', function(e) {
+            if (showContourLines) {
+                spacing = parseFloat(e.target.value);
+                if (!isNaN(spacing)) {
+                    countourLineSpacing = spacing;
+                    updateGlobeMaterial();
+                } else {
+                    messageElement.textContent = 'NaN!';
+                }
+            }            
+        });
+        const toggleInvertContoursColor = document.getElementById('toggleInvertContoursColor');
+        toggleInvertContoursColor.addEventListener('click', function(e) {
+            invertContourLines = e.target.checked;
+            if (showContourLines) {
+                updateGlobeMaterial();
+            }
+        });
+        const toggleZoomToHrDtm = document.getElementById('toggleZoomToHrDtm');
+        toggleZoomToHrDtm.addEventListener('click', function(e) {
+            zoomToHrDtm = e.target.checked;
+        });
+        addContourButton.addEventListener('click', () => {
+            const elevation = parseFloat(contourBandElevation.value);
+            const width = parseFloat(contourBandWidth.value);
+            if (!isNaN(elevation)) {
+                addContourBand(elevation, width);
+            } else {
+                messageElement.textContent = 'NaN!';
+            }
+        });
+
+        // Init some things
+        ramp = getColorRamp();
+        updateGlobeMaterial();
+
+        /*** Functions ***/
+
+        // Shows the corresponding tab
+        function showTab(tabName) {
+            document.getElementById('terrain-exaggeration-tab').classList.remove('active');
+            document.getElementById('contours-tab').classList.remove('active');
+            document.getElementById('color-ramp-tab').classList.remove('active');
+            document.getElementById('misc-tab').classList.remove('active');
+            document.getElementById(`${tabName}`).classList.add('active');
+        }
+
+        // Adds a contour band to the global list
+        function addContourBand(elevation, width) {
+            // Check if contour already exists
+            if (contourBands.some(band => band.elevation === elevation)) {
+                messageElement.textContent = `Contour band at ${elevation}m already exists.`;
+                return;
+            }
+
+            const color = Cesium.Color.fromRandom({alpha: 0.5});
+            const band = {
+                elevation: elevation,
+                width: width,
+                color: color,
+            };
+
+            contourBands.push(band);
+            
+            const listItem = document.createElement('div');
+            listItem.innerHTML = `
+                <span style="color: ${color.toCssColorString()}">■</span>
+                ${elevation}m
+                <button class="removeContourBand">Remove</button>
+            `;
+            listItem.querySelector('.removeContourBand').addEventListener('click', () => {
+                contourBands = contourBands.filter(band => band.elevation !== elevation);
+                updateGlobeMaterial();
+                contourList.removeChild(listItem);
+            });
+            contourList.appendChild(listItem);
+
+            // Clear any previous message
+            messageElement.textContent = '';
+            updateGlobeMaterial();
+        }
+
+        // Creates a contour band object
+        function createBand(bandPosition, bandThickness, color) {
+            antialias = Math.min(10.0, bandThickness * 0.1);
+            band = {
+                entries: [
+                    {
+                        height: bandPosition - bandThickness * 0.5 - antialias,
+                        color: color,
+                    },
+                    {
+                        height: bandPosition - bandThickness * 0.5,
+                        color: color,
+                    },
+                    {
+                        height: bandPosition + bandThickness * 0.5,
+                        color: color,
+                    },
+                    {
+                        height: bandPosition + bandThickness * 0.5 + antialias,
+                        color: color,
+                    },
+                ],
+            };
+            return band;
+        }
+
+        // Changes the point of view to fit the extent of the loaded terrain
+        function zoomToTerrain(terrain_id) {
+            if (!zoomToHrDtm) {
+                return;
+            }
+            console.log("Zooming to terrain");
+            if (terrain_id !== "") {
+                // Request the layer.json file (contains the bounds of the terrain!)
+                var request = new XMLHttpRequest();
+                request.open("GET", HRDTMsURL + '/' + terrain_id + "/layer.json", false);
+                request.send();                
+                if(request.readyState === XMLHttpRequest.DONE) {                
+                    if(request.status === 200) {    
+                        // layer.json found, extract the bounds of the terrain and zoom to that rectangle
+                        var layerJson = JSON.parse(request.responseText);
+
+                        var rect = Cesium.Rectangle.fromDegrees(layerJson.bounds[0], layerJson.bounds[1], layerJson.bounds[2], layerJson.bounds[3]);                        
+                        
+                        //viewer.zoomTo does not admit rectangles, use one of the following options:
+                        viewer.camera.setView({destination: rect,});
+                        //viewer.camera.flyTo({destination: rect,});
+                    }
+                }
+            }
+        }
+
+        // Create a color ramp based on https://matplotlib.org/cmocean/#deep
+        // Note: ramp extracted from the sandcastle example: https://sandcastle.cesium.com/?src=Bathymetry.html
+        function getColorRamp() {
+            const ramp = document.getElementById("colorRamp");
+            ramp.width = 100;
+            ramp.height = 15;
+            const ctx = ramp.getContext("2d");
+            const grd = ctx.createLinearGradient(0, 0, 100, 0);
+
+            grd.addColorStop(dFun(colorRampMaxHeight), "#B79E6C");
+            grd.addColorStop(dFun(100.0), "#FBFFEE");
+            grd.addColorStop(dFun(0.0), "#F9FCCA");
+            grd.addColorStop(dFun(-500.0), "#BDE7AD");
+            grd.addColorStop(dFun(-1000.0), "#81D2A3");
+            grd.addColorStop(dFun(-1500.0), "#5AB7A4");
+            grd.addColorStop(dFun(-2000.0), "#4C9AA0");
+            grd.addColorStop(dFun(-2500.0), "#437D9A");
+            grd.addColorStop(dFun(-4000.0), "#3E6194");
+            grd.addColorStop(dFun(-5000.0), "#424380");
+            grd.addColorStop(dFun(-8000.0), "#392D52");
+            grd.addColorStop(dFun(colorRampMinHeight), "#291C2F");
+
+            ctx.fillStyle = grd;
+            ctx.fillRect(0, 0, ramp.width, ramp.height);
+
+            return ramp;
+        }
+        
+        // Creates a composite material joining ElevationContour and ElevationRamp materials
+        function getElevationColorContourLinesMaterial() {
+            // Creates a composite material with both elevation shading and contour lines
+            return new Cesium.Material({
+                fabric: {
+                type: "ElevationColorContourLines",
+                materials: {
+                    contourMaterial: {
+                        type: "ElevationContour",
+                    },
+                    elevationRampMaterial: {
+                        type: "ElevationRamp",
+                    },
+                },
+                components: {
+                    diffuse:
+                    "(1.0 - contourMaterial.alpha) * elevationRampMaterial.diffuse + contourMaterial.alpha * contourMaterial.diffuse",
+                    alpha: "max(contourMaterial.alpha, elevationRampMaterial.alpha)",
+                },
+                },
+                translucent: false,
+            });
+        }
+
+        // Creates a composite material joining ElevationBand and ElevationRamp materials
+        function getElevationColorContourBandsMaterial() {            
+            return new Cesium.Material({
+                fabric: {
+                type: "ElevationColorContourBands",
+                materials: {                    
+                    elevationBandsMaterial: {
+                        type: "ElevationBand",
+                    },                    
+                    elevationRampMaterial: {
+                        type: "ElevationRamp",
+                    },
+                },
+                components: {
+                    diffuse:
+                    "(1.0 - elevationBandsMaterial.alpha) * elevationRampMaterial.diffuse + elevationBandsMaterial.alpha * elevationBandsMaterial.diffuse",
+                    alpha: "max(elevationBandsMaterial.alpha, elevationRampMaterial.alpha)",
+                },
+                },
+                translucent: false,
+            });
+        }
+
+        // Updates the Globe's material
+        function updateGlobeMaterial() {
+            let material;
+            if (showContourLines) {
+                if (showElevationColorRamp) {
+                    material = getElevationColorContourLinesMaterial();
+                    let shadingUniforms = material.materials.elevationRampMaterial.uniforms;
+                    shadingUniforms.image = getColorRamp();
+                    shadingUniforms.minimumHeight = colorRampMinHeight * scene.verticalExaggeration;
+                    shadingUniforms.maximumHeight = colorRampMaxHeight * scene.verticalExaggeration;
+                    shadingUniforms = material.materials.contourMaterial.uniforms;
+                    shadingUniforms.width = 1.0;
+                    shadingUniforms.spacing = countourLineSpacing * scene.verticalExaggeration;
+                    shadingUniforms.color = invertContourLines
+                        ? Cesium.Color.WHITE.withAlpha(0.5)
+                        : Cesium.Color.BLACK.withAlpha(0.5);
+                }
+                else {
+                    material = Cesium.Material.fromType("ElevationContour");
+                    let shadingUniforms = material.uniforms;
+                    shadingUniforms.width = 1.0;
+                    shadingUniforms.spacing = countourLineSpacing * scene.verticalExaggeration;
+                    shadingUniforms.color = invertContourLines
+                        ? Cesium.Color.WHITE
+                        : Cesium.Color.BLACK;                               
+                }
+            }
+            else if (showContourBands) {
+                if (showElevationColorRamp) {
+                    material = getElevationColorContourBandsMaterial();
+                    let shadingUniforms = material.materials.elevationRampMaterial.uniforms;
+                    shadingUniforms.image = getColorRamp();
+                    shadingUniforms.minimumHeight = colorRampMinHeight * scene.verticalExaggeration;
+                    shadingUniforms.maximumHeight = colorRampMaxHeight * scene.verticalExaggeration;
+                    if (contourBands.length > 0) {
+                        layers = [];
+                        for (let i = 0; i < contourBands.length; i++) {
+                            band = createBand(contourBands[i].elevation*scene.verticalExaggeration, contourBands[i].width*scene.verticalExaggeration, contourBands[i].color);
+                            layers.push(band);
+                        }     
+                        let bandsMaterial = material.materials.elevationBandsMaterial;
+                        bandsMaterial.scene = viewer.scene;
+                        bandsMaterial.layers = layers;
+                    }
+                }
+                else if (contourBands.length > 0) {
+                        layers = [];
+                        for (let i = 0; i < contourBands.length; i++) {
+                            band = createBand(contourBands[i].elevation*scene.verticalExaggeration, contourBands[i].width*scene.verticalExaggeration, contourBands[i].color);
+                            layers.push(band);
+                        }     
+                        material = Cesium.createElevationBandMaterial({
+                            scene: viewer.scene,
+                            layers: layers,
+                        });
+                }   
+            }
+            else if (showElevationColorRamp) {
+                material = Cesium.Material.fromType("ElevationRamp");
+                const shadingUniforms = material.uniforms;
+                shadingUniforms.image = getColorRamp();
+                shadingUniforms.minimumHeight = colorRampMinHeight * scene.verticalExaggeration;
+                shadingUniforms.maximumHeight = colorRampMaxHeight * scene.verticalExaggeration;
+            }
+            globe.material = material;
+        }        
+    </script>
+</body>
+</html>
